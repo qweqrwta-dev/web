@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>lethoso — OX 50×50</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#10131a;color:#e8ecf1;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+.wrap{max-width:1100px;margin:auto;padding:20px}
+h1{margin:0 0 6px;font-size:28px}.sub{color:#9da7b5;margin-bottom:18px}
+.panel{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:#191e27;padding:12px;border:1px solid #2b3340;border-radius:12px}
+button,select{background:#222936;color:#fff;border:1px solid #394352;border-radius:8px;padding:9px 12px;font-size:14px}
+button{cursor:pointer}button:hover{background:#2b3442}
+#status{font-weight:700;margin-left:auto}
+.board-wrap{margin-top:16px;border:1px solid #303947;border-radius:12px;background:#0c0f14;overflow:auto;height:72vh}
+#board{display:grid;grid-template-columns:repeat(50,28px);grid-template-rows:repeat(50,28px);width:max-content}
+.cell{width:28px;height:28px;border-right:1px solid #252c36;border-bottom:1px solid #252c36;background:#11151c;display:grid;place-items:center;font-weight:800;font-size:17px;user-select:none}
+.cell:hover{background:#1c2430}.x{color:#6eb6ff}.o{color:#ff7c91}
+.win{background:#394b2b!important}
+.info{margin-top:12px;color:#aeb7c4;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>lethoso — OX</h1>
+<div class="sub">Bàn cờ 50×50 · thắng khi có 5 quân liên tiếp</div>
+<div class="panel">
+<label>Độ khó:
+<select id="difficulty">
+<option value="easy">Dễ</option>
+<option value="medium">Trung bình</option>
+<option value="hard">Khó</option>
+<option value="expert">Rất khó</option>
+</select></label>
+<button id="new">Ván mới</button>
+<button id="reset">Xóa bàn</button>
+<div id="status">Lượt của bạn (X)</div>
+</div>
+<div class="board-wrap"><div id="board"></div></div>
+<div class="info">Bạn: X · Bot: O · Có thể cuộn/zoom để xem bàn cờ lớn.</div>
+</div>
+<script>
+const N=50, WIN=5;
+const boardEl=document.getElementById('board');
+const statusEl=document.getElementById('status');
+const diffEl=document.getElementById('difficulty');
+let cells=[], gameOver=false, thinking=false, turn='X';
+
+function makeBoard(){
+  boardEl.innerHTML=''; cells=Array.from({length:N},()=>Array(N).fill(''));
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    const d=document.createElement('div'); d.className='cell';
+    d.dataset.r=r; d.dataset.c=c;
+    d.onclick=()=>playerMove(r,c);
+    boardEl.appendChild(d);
+  }
+}
+function setCell(r,c,v){
+  if(cells[r][c]) return false;
+  cells[r][c]=v;
+  const d=boardEl.children[r*N+c];
+  d.textContent=v; d.classList.add(v.toLowerCase());
+  return true;
+}
+function inb(r,c){return r>=0&&r<N&&c>=0&&c<N}
+function line(r,c,dr,dc,p){
+  let n=0, rr=r, cc=c;
+  while(inb(rr,cc)&&cells[rr][cc]===p){n++;rr+=dr;cc+=dc}
+  rr=r-dr;cc=c-dc;
+  while(inb(rr,cc)&&cells[rr][cc]===p){n++;rr-=dr;cc-=dc}
+  return n;
+}
+function winAt(r,c,p){
+  return [[1,0],[0,1],[1,1],[1,-1]].some(([dr,dc])=>line(r,c,dr,dc,p)>=WIN);
+}
+function boardFull(){return cells.every(row=>row.every(Boolean))}
+function finish(msg){gameOver=true;thinking=false;statusEl.textContent=msg}
+function playerMove(r,c){
+  if(gameOver||thinking||turn!=='X'||!setCell(r,c,'X'))return;
+  if(winAt(r,c,'X')) return finish('Bạn thắng!');
+  if(boardFull()) return finish('Hòa!');
+  turn='O'; thinking=true; statusEl.textContent='Bot đang suy nghĩ…';
+  setTimeout(botMove,80);
+}
+function emptyCells(){
+  const a=[]; for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(!cells[r][c])a.push([r,c]); return a;
+}
+function neighbors(){
+  const s=new Set(), a=[];
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(cells[r][c]){
+    for(let dr=-2;dr<=2;dr++)for(let dc=-2;dc<=2;dc++){
+      const rr=r+dr,cc=c+dc,k=rr+','+cc;
+      if(inb(rr,cc)&&!cells[rr][cc]&&!s.has(k)){s.add(k);a.push([rr,cc])}
+    }
+  }
+  return a.length?a:emptyCells();
+}
+function immediateWin(p){
+  for(const [r,c] of neighbors()){
+    cells[r][c]=p;
+    const w=winAt(r,c,p); cells[r][c]='';
+    if(w)return [r,c];
+  }
+  return null;
+}
+function scoreCell(r,c,p){
+  let s=Math.random()*2;
+  const dirs=[[1,0],[0,1],[1,1],[1,-1]];
+  for(const [dr,dc] of dirs){
+    for(const q of [p,p==='X'?'O':'X']){
+      let n=0;
+      for(const sign of [-1,1]){
+        for(let k=1;k<5;k++){
+          const rr=r+dr*k*sign,cc=c+dc*k*sign;
+          if(!inb(rr,cc))break;
+          if(cells[rr][cc]===q)n++; else if(cells[rr][cc])break; else break;
+        }
+      }
+      s += q===p ? n*n*12 : n*n*9;
+    }
+  }
+  const center=(N-1)/2;
+  s += Math.max(0,18-Math.abs(r-center)-Math.abs(c-center));
+  return s;
+}
+function chooseMove(){
+  const d=diffEl.value, a=neighbors();
+  if(d==='easy') return a[Math.floor(Math.random()*a.length)];
+  const attack=immediateWin('O'); if(attack)return attack;
+  const block=immediateWin('X'); if(block)return block;
+  if(d==='medium') return a.reduce((best,x)=>scoreCell(...x,'O')>scoreCell(...best,'O')?x:best,a[0]);
+  // Hard/Expert: evaluate candidates by attack + defense, with a small candidate cap.
+  const scored=a.map(x=>({x,s:scoreCell(...x,'O')+scoreCell(...x,'X')*.85}))
+    .sort((u,v)=>v.s-u.s).slice(0,d==='expert'?22:12);
+  let best=scored[0]?.x || a[0], bestS=-Infinity;
+  for(const {x} of scored){
+    const [r,c]=x; cells[r][c]='O';
+    let s=scoreCell(r,c,'O')*1.35;
+    cells[r][c]='';
+    if(winAt(r,c,'O'))s+=1e6;
+    cells[r][c]='X';
+    if(winAt(r,c,'X'))s+=5e5;
+    cells[r][c]='';
+    s+=scoreCell(r,c,'X');
+    if(s>bestS){bestS=s;best=x}
+  }
+  return best;
+}
+function botMove(){
+  if(gameOver)return;
+  const m=chooseMove(); if(!m){return finish('Hòa!')}
+  const [r,c]=m; setCell(r,c,'O');
+  if(winAt(r,c,'O')) return finish('Bot thắng!');
+  if(boardFull()) return finish('Hòa!');
+  turn='X'; thinking=false; statusEl.textContent='Lượt của bạn (X)';
+}
+function reset(){
+  gameOver=false;thinking=false;turn='X';makeBoard();statusEl.textContent='Lượt của bạn (X)';
+}
+document.getElementById('new').onclick=reset;
+document.getElementById('reset').onclick=reset;
+makeBoard();
+</script>
+</body>
+</html>
