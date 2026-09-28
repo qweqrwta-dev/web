@@ -18,7 +18,7 @@ button{cursor:pointer}button:hover{background:#2b3442}
 .cell{width:28px;height:28px;border-right:1px solid #252c36;border-bottom:1px solid #252c36;background:#11151c;display:grid;place-items:center;font-weight:800;font-size:17px;user-select:none}
 .cell:hover{background:#1c2430}.x{color:#6eb6ff}.o{color:#ff7c91}
 .win{background:#394b2b!important}
-.info{margin-top:12px;color:#aeb7c4;font-size:13px}
+.info{margin-top:12px;color:#aeb7c4;font-size:13px}.hint{outline:2px solid #7c8cff;outline-offset:-2px}
 </style>
 </head>
 <body>
@@ -34,6 +34,7 @@ button{cursor:pointer}button:hover{background:#2b3442}
 <option value="expert">Rất khó</option>
 </select></label>
 <button id="new">Ván mới</button>
+<button id="hint">💡 Gợi ý (bất khả thi)</button>
 <button id="reset">Xóa bàn</button>
 <div id="status">Lượt của bạn (X)</div>
 </div>
@@ -91,7 +92,7 @@ function neighbors(){
   for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(cells[r][c]){
     for(let dr=-2;dr<=2;dr++)for(let dc=-2;dc<=2;dc++){
       const rr=r+dr,cc=c+dc,k=rr+','+cc;
-      if(inb(rr,cc)&&!cells[rr][cc]&&!s.has(k)){s.add(k);a.push([rr,cc]);}
+      if(inb(rr,cc)&&!cells[rr][cc]&&!s.has(k)){s.add(k);a.push([rr,cc])}
     }
   }
   return a.length?a:emptyCells();
@@ -155,10 +156,30 @@ function botMove(){
   if(boardFull()) return finish('Hòa!');
   turn='X'; thinking=false; statusEl.textContent='Lượt của bạn (X)';
 }
+function hintMove(){
+  if(gameOver || thinking || turn!=='X'){
+    statusEl.textContent = gameOver ? 'Ván đã kết thúc.' : 'Hãy chờ tới lượt của bạn.';
+    return;
+  }
+  const candidates=neighbors();
+  if(!candidates.length)return;
+  let move=immediateWin('X');
+  if(!move)move=immediateWin('O');
+  if(!move){
+    move=candidates.reduce((best,x)=>scoreCell(...x,'X')>scoreCell(...best,'X')?x:best,candidates[0]);
+  }
+  const [r,c]=move, el=boardEl.children[r*N+c];
+  el.classList.add('hint');
+  el.scrollIntoView({behavior:'smooth',block:'center',inline:'center'});
+  statusEl.textContent=`💡 Gợi ý: hàng ${r+1}, cột ${c+1}`;
+  setTimeout(()=>el.classList.remove('hint'),1800);
+}
+
 function reset(){
   gameOver=false;thinking=false;turn='X';makeBoard();statusEl.textContent='Lượt của bạn (X)';
 }
 document.getElementById('new').onclick=reset;
+document.getElementById('hint').onclick=hintMove;
 document.getElementById('reset').onclick=reset;
 makeBoard();
 </script>
